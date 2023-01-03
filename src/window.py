@@ -1,11 +1,15 @@
-"""Window things"""
+"""Window"""
 import os
 import sys
 import time
 import io
 import threading
+from pygments import highlight
+from pygments.lexers import get_lexer_by_name
+from pygments.formatters import Terminal256Formatter
 
 from yachalk import chalk
+import jedi
 from readchar import readkey as getch
 from readchar.key import (
     ESC,
@@ -18,10 +22,10 @@ from readchar.key import (
     DOWN,
     BACKSPACE,
     CTRL_Q,
-    ENTER
+    ENTER,
 )
 
-from .tabs import Lambda, File, Edit
+from .menus import Lambda, File, Edit
 
 CTRL_BACKSPACE = '\x7f'
 
@@ -35,8 +39,8 @@ class Window(object):
         self.terminal_lines = os.get_terminal_size().lines
         self.can_draw = True
 
-        self.tabs = [Lambda, File, Edit]
-        self.current_tab = 0
+        self.menus = [Lambda, File, Edit]
+        self.current_menu = 0
 
         self.input = [[]]
         self.input_index = 0
@@ -44,14 +48,25 @@ class Window(object):
         self.is_in_input = True
         self.is_cursor_visible = True
 
-        self.config = {'tabs.start': ' \ue0ba', 'tabs.end': '\ue0bc ',
-                       'cursor.shape': 'u'}
-        self.style = {'tab.unselected': chalk.bg_gray,
-                      'tab.start.selected': chalk.green,
-                      'tab.start.unselected': chalk.gray,
-                      'tab.end.unselected': chalk.gray,
-                      'tab.selected': chalk.bg_green,
-                      'tab.bg_color': chalk.bg_gray}
+        self.completions = []
+        self.is_auto_complete_visible = False
+        self.auto_complete_scroll_bar = 0
+
+        self.box = '┏┓━┃┗┛'
+        self.icons = {'module': '\uea8b ', 'class': '\ueb5b ',
+                      'instance': '\ueb63 ', 'function': '\uea8c ',
+                      'param': '\uea92 ', 'path': '\ueb60 ',
+                      'keyword': '\ueb62 ', 'property': '\ueb65 ',
+                      'statement': '\uea88 '}
+        self.config = {'menu.start': ' \ue0ba', 'menu.end': '\ue0bc ',
+                       'cursor.shape': 'b', 'theme': 'monokai'}
+        self.style = {'menu.unselected': chalk.bg_gray,
+                      'menu.start.selected': chalk.green,
+                      'menu.start.unselected': chalk.gray,
+                      'menu.end.unselected': chalk.gray,
+                      'menu.selected': chalk.bg_green,
+                      'menu.bg_color': chalk.bg_gray,
+                      'completionbox.color': chalk.bg_gray.white}
 
     def start(self):
         """Runs at start of execution"""
@@ -64,14 +79,21 @@ class Window(object):
         self.stdout.flush()
         sys.exit()
 
+    def highlight(self, code):
+        """syntax highlighter"""
+        return highlight(code,
+                         lexer=get_lexer_by_name("markdown"),
+                         formatter=Terminal256Formatter(style=self.config
+                                                        ['theme']))
+
     def key_right(self):
         """Right key press"""
         if self.is_in_input is True:
             if self.input_index < len(self.input[self.input_line]):
                 self.input_index += 1
         else:
-            if self.current_tab < len(self.tabs) - 1:
-                self.current_tab += 1
+            if self.current_menu < len(self.menus) - 1:
+                self.current_menu += 1
 
     def key_left(self):
         """Left key press"""
@@ -79,19 +101,24 @@ class Window(object):
             if self.input_index > 0:
                 self.input_index -= 1
         else:
-            if self.current_tab > 0:
-                self.current_tab -= 1
+            if self.current_menu > 0:
+                self.current_menu -= 1
 
     def key_up(self):
         """Up key press"""
-        if self.input_line > 0:
+        if (self.is_auto_complete_visible is True and
+           self.auto_complete_scroll_bar > 0):
+            self.auto_complete_scroll_bar -= 1
+        elif self.input_line > 0:
             self.input_line -= 1
             if self.input_index > len(self.input[self.input_line]):
                 self.key_end()
 
     def key_down(self):
         """Down key press"""
-        if self.input_line < len(self.input) - 1:
+        if self.is_auto_complete_visible is True:
+            self.auto_complete_scroll_bar += 1
+        elif self.input_line < len(self.input) - 1:
             self.input_line += 1
             if self.input_index > len(self.input[self.input_line]):
                 self.key_end()
@@ -118,7 +145,11 @@ class Window(object):
 
     def set_underline_here(self, character):
         """Sets an under line under `character`"""
-        self.stdout.write(f'\033[4m{character}\033[0m')
+        self.stdout.write(f'\033[21m\033[4m{character}\033[0m')
+
+    def set_block_here(self, character):
+        """Sets an under line under `character`"""
+        self.stdout.write(f'\033[107m\033[30m{character}\033[0m')
 
     def clear(self):
         """Clears terminal"""
@@ -129,32 +160,68 @@ class Window(object):
     def clear_with_line(self):
         """Clears terminal and adds an line for line numbers"""
         self.move_cursor(0, 0)
-        self.stdout.write(('     \u2502' + (' ' * (self.terminal_cols - 6))) *
-                          self.terminal_lines)
+        self.stdout.write(('~    \u2502' + (' ' * (self.terminal_cols - 6))) *
+                          (self.terminal_lines))
+        self.move_cursor(0, 1)
+        self.stdout.write('     \u2502')
         self.move_cursor(0, 0)
+
+    def auto_complete(self, left, top, index):
+        """Writes auto Completion"""
+        equal_to_ten = len(self.completions[index: 10 + index]) == 10
+        completions = (self.completions[index: 10 + index] if equal_to_ten
+                       else self.completions)
+        if len(completions) == 0:
+            lenth = 0
+            self.is_auto_complete_visible = False
+        else:
+            lenth = len(max([i.name for i in completions], key=len))
+            self.is_auto_complete_visible = True
+        apply_style = self.style['completionbox.color']
+        if lenth > 0:
+            self.move_cursor(left, top)
+            self.stdout.write(apply_style(self.box[0] + (self.box[2] * (lenth
+                                          + 6)) + self.box[1]))
+        for line_index, i in enumerate(completions):
+            self.move_cursor(left, top + line_index + 1)
+            text = f'{self.box[3]}   '
+            if (equal_to_ten is False and index == line_index) or (
+                                                                   equal_to_ten
+                                                                   is True and
+                                                                   line_index
+                                                                   == 0):
+                text = f'{self.box[3]} > '
+            text += (self.icons[i.type] + (f'{i.name.ljust(lenth)} '
+                     + self.box[3]))
+            self.stdout.write(apply_style(text))
+        self.move_cursor(left, top + len(completions) + 1)
+        if lenth > 0:
+            self.stdout.write(apply_style(self.box[4] +
+                              f'{self.box[2] * (lenth + 6)}{self.box[5]}'))
+        if self.is_auto_complete_visible is False:
+            self.auto_complete_scroll_bar = 0
 
     def draw(self):
         """Updates the screen"""
         while self.can_draw is True:
             self.cursor_hide()
             self.clear_with_line()
-            self.stdout.write(self.style['tab.bg_color'](' ' *
+            self.stdout.write(self.style['menu.bg_color'](' ' *
                               self.terminal_cols))
-            self.move_cursor(self.terminal_cols - len(self.config['tabs.end']),
+            self.move_cursor(self.terminal_cols - len(self.config['menu.end']),
                              0)
-            self.stdout.write(self.style["tab.end.unselected"](self.
-                              config['tabs.end']))
-
+            self.stdout.write(self.style["menu.end.unselected"](self.
+                              config['menu.end']))
             self.move_cursor(0, 0)
-            self.stdout.write(self.style["tab.start.selected"](
-                self.config['tabs.start']) if self.current_tab
-                == 0 else self.style["tab.start.unselected"]
-                (self.config['tabs.start']))
-            for tab_index, i in enumerate(self.tabs):
-                self.stdout.write(self.style["tab.selected"](
+            self.stdout.write(self.style["menu.start.selected"](
+                self.config['menu.start']) if self.current_menu
+                == 0 else self.style["menu.start.unselected"]
+                (self.config['menu.start']))
+            for menu_index, i in enumerate(self.menus):
+                self.stdout.write(self.style["menu.selected"](
                                   f' {i.name} ')
-                                  if tab_index == self.current_tab else
-                                  self.style["tab.unselected"](f' {i.name} '))
+                                  if menu_index == self.current_menu else
+                                  self.style["menu.unselected"](f' {i.name} '))
 
             for line_index, i in enumerate(self.input):
                 self.move_cursor(0, line_index + 2)
@@ -162,14 +229,19 @@ class Window(object):
                 self.stdout.write(''.join(i))
             self.move_cursor(self.input_index + 7, self.input_line + 2)
             if self.is_in_input is True:
-                if self.config['cursor.shape'] == 'u':
-                    try:
-                        character = (self.input[self.input_line]
-                                     [self.input_index])
-                    except IndexError:
-                        character = ' '
-                    if self.is_cursor_visible is True:
+                try:
+                    character = (self.input[self.input_line]
+                                 [self.input_index])
+                except IndexError:
+                    character = ' '
+                if self.is_cursor_visible is True:
+                    if self.config['cursor.shape'] == 'u':
                         self.set_underline_here(character)
+                    elif self.config['cursor.shape'] == 'b':
+                        self.set_block_here(character)
+
+            self.auto_complete(self.input_index + 7, self.input_line + 2,
+                               self.auto_complete_scroll_bar)
 
             self.stdout.write('')
             self.move_cursor(0, 0)
@@ -185,9 +257,9 @@ class Window(object):
     def remove_line(self):
         """Removes an line from iput"""
         if self.input_line > 0:
-            self.input[self.input_line] = []
+            self.input.pop(self.input_line)
             self.input_line -= 1
-            self.input_index = len(self.input[self.input_line]) - 1
+            self.key_end()
 
     def add_character(self, character):
         """Adds an character to input"""
@@ -199,6 +271,8 @@ class Window(object):
         if self.input_index > 0:
             self.input[self.input_line].pop(self.input_index - 1)
             self.input_index -= 1
+        else:
+            self.remove_line()
 
     def remove_word(self):
         """Removes an word from input"""
@@ -226,10 +300,13 @@ class Window(object):
                 elif self.is_in_input is True:
                     if key == ENTER:
                         self.add_newline()
+                        self.is_auto_complete_visible = False
                     elif key == DELETE:
                         self.remove_line()
+                        self.is_auto_complete_visible = False
                     elif key == BACKSPACE:
                         self.remove_character()
+                        self.is_auto_complete_visible = False
                     elif key == UP:
                         self.key_up()
                     elif key == DOWN:
@@ -242,6 +319,7 @@ class Window(object):
                         self.remove_word()
                     elif ord(key[0]) in range(32, 127):
                         self.add_character(key[0])
+                        self.is_auto_complete_visible = False
                 self.is_cursor_visible = True
             except KeyboardInterrupt:
                 self.end()
@@ -257,9 +335,21 @@ class Window(object):
                 self.is_cursor_visible = False
                 time.sleep(1)
 
+    def py_auto_complete(self):
+        """python auto complete"""
+        while True:
+            input_str = '\n'.join(''.join(i) for i in self.input)
+            line = self.input_line
+            col = self.input_index
+            if (input_str != '' and input_str.split('\n')[line] != ''):
+                script = jedi.Script(input_str, path='')
+                self.completions = script.complete(line + 1,
+                                                   col)
+
     def main_loop(self):
         """Starts main loop"""
         self.start()
         threading.Thread(target=self.check_for_keys).start()
         threading.Thread(target=self.draw, daemon=True).start()
         threading.Thread(target=self.cursor, daemon=True).start()
+        threading.Thread(target=self.py_auto_complete, daemon=True).start()

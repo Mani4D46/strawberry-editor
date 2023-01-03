@@ -1,3 +1,4 @@
+"""Lambda"""
 from .window import Window
 
 window = Window()
