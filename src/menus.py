@@ -1,9 +1,9 @@
 """Menus"""
 
 
-class Lambda():
-    """Lambda menu"""
-    name = '\u03bb Lambda'
+class Strawberry():
+    """Strawberry menu"""
+    name = 'Strawberry'
     list = ['a', 'b', 'c', 'd']
 
 

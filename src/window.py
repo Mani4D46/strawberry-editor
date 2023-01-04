@@ -2,14 +2,9 @@
 import os
 import sys
 import time
-import io
 import threading
-from pygments import highlight
-from pygments.lexers import get_lexer_by_name
 from pygments.formatters import Terminal256Formatter
 
-from yachalk import chalk
-import jedi
 from readchar import readkey as getch
 from readchar.key import (
     ESC,
@@ -23,9 +18,12 @@ from readchar.key import (
     BACKSPACE,
     CTRL_Q,
     ENTER,
+    F4
 )
 
-from .menus import Lambda, File, Edit
+from .settings import ICONS, BOX, STYLES, CONFIGS
+from .menus import Strawberry, File, Edit
+from .extensions import extensions
 
 CTRL_BACKSPACE = '\x7f'
 
@@ -34,13 +32,14 @@ class Window(object):
     """Window"""
     def __init__(self):
         self.stdout = sys.stdout
-        sys.stdout = io.StringIO("")
         self.terminal_cols = os.get_terminal_size().columns
         self.terminal_lines = os.get_terminal_size().lines
         self.can_draw = True
 
-        self.menus = [Lambda, File, Edit]
+        self.menus = [Strawberry, File, Edit]
         self.current_menu = 0
+
+        self.file_name = '<None>'
 
         self.input = [[]]
         self.input_index = 0
@@ -48,25 +47,19 @@ class Window(object):
         self.is_in_input = True
         self.is_cursor_visible = True
 
-        self.completions = []
-        self.is_auto_complete_visible = False
-        self.auto_complete_scroll_bar = 0
+        self.highlighter = lambda code, _: code
+        self.highlighters = []
 
-        self.box = '┏┓━┃┗┛'
-        self.icons = {'module': '\uea8b ', 'class': '\ueb5b ',
-                      'instance': '\ueb63 ', 'function': '\uea8c ',
-                      'param': '\uea92 ', 'path': '\ueb60 ',
-                      'keyword': '\ueb62 ', 'property': '\ueb65 ',
-                      'statement': '\uea88 '}
-        self.config = {'menu.start': ' \ue0ba', 'menu.end': '\ue0bc ',
-                       'cursor.shape': 'b', 'theme': 'monokai'}
-        self.style = {'menu.unselected': chalk.bg_gray,
-                      'menu.start.selected': chalk.green,
-                      'menu.start.unselected': chalk.gray,
-                      'menu.end.unselected': chalk.gray,
-                      'menu.selected': chalk.bg_green,
-                      'menu.bg_color': chalk.bg_gray,
-                      'completionbox.color': chalk.bg_gray.white}
+        self.completions = []
+        self.is_auto_complete_visible = True
+        self.auto_complete_scroll_bar = 0
+        self.auto_completer = lambda _, __, ___: []
+        self.auto_completers = []
+
+        self.box = BOX
+        self.icons = ICONS
+        self.config = CONFIGS
+        self.style = STYLES
 
     def start(self):
         """Runs at start of execution"""
@@ -80,11 +73,10 @@ class Window(object):
         sys.exit()
 
     def highlight(self, code):
-        """syntax highlighter"""
-        return highlight(code,
-                         lexer=get_lexer_by_name("markdown"),
-                         formatter=Terminal256Formatter(style=self.config
-                                                        ['theme']))
+        """Syntax highlighter"""
+        return self.highlighter(code,
+                                (Terminal256Formatter(style=self.config
+                                                      ['theme'])))
 
     def key_right(self):
         """Right key press"""
@@ -166,7 +158,7 @@ class Window(object):
         self.stdout.write('     \u2502')
         self.move_cursor(0, 0)
 
-    def auto_complete(self, left, top, index):
+    def draw_auto_complete(self, left, top, index):
         """Writes auto Completion"""
         equal_to_ten = len(self.completions[index: 10 + index]) == 10
         completions = (self.completions[index: 10 + index] if equal_to_ten
@@ -226,7 +218,7 @@ class Window(object):
             for line_index, i in enumerate(self.input):
                 self.move_cursor(0, line_index + 2)
                 self.stdout.write(str(line_index + 1).ljust(5) + '\u2502 ')
-                self.stdout.write(''.join(i))
+                self.stdout.write(self.highlight(''.join(i)).replace('\n', ''))
             self.move_cursor(self.input_index + 7, self.input_line + 2)
             if self.is_in_input is True:
                 try:
@@ -239,9 +231,10 @@ class Window(object):
                         self.set_underline_here(character)
                     elif self.config['cursor.shape'] == 'b':
                         self.set_block_here(character)
-
-            self.auto_complete(self.input_index + 7, self.input_line + 2,
-                               self.auto_complete_scroll_bar)
+            if (self.input[self.input_line] != [] and
+               self.is_auto_complete_visible):
+                self.draw_auto_complete(self.input_index + 7, self.input_line
+                                        + 3, self.auto_complete_scroll_bar)
 
             self.stdout.write('')
             self.move_cursor(0, 0)
@@ -290,7 +283,10 @@ class Window(object):
             try:
                 key = getch()
                 if key == ESC:
-                    self.is_in_input = not self.is_in_input
+                    if self.is_auto_complete_visible is not True:
+                        self.is_in_input = not self.is_in_input
+                    else:
+                        self.is_auto_complete_visible = False
                 elif key == LEFT:
                     self.key_left()
                 elif key == RIGHT:
@@ -300,13 +296,10 @@ class Window(object):
                 elif self.is_in_input is True:
                     if key == ENTER:
                         self.add_newline()
-                        self.is_auto_complete_visible = False
                     elif key == DELETE:
                         self.remove_line()
-                        self.is_auto_complete_visible = False
                     elif key == BACKSPACE:
                         self.remove_character()
-                        self.is_auto_complete_visible = False
                     elif key == UP:
                         self.key_up()
                     elif key == DOWN:
@@ -317,9 +310,11 @@ class Window(object):
                         self.key_end()
                     elif key == CTRL_BACKSPACE:
                         self.remove_word()
+                    elif key == F4:
+                        self.is_auto_complete_visible = True
                     elif ord(key[0]) in range(32, 127):
                         self.add_character(key[0])
-                        self.is_auto_complete_visible = False
+                        self.is_auto_complete_visible = True
                 self.is_cursor_visible = True
             except KeyboardInterrupt:
                 self.end()
@@ -335,16 +330,29 @@ class Window(object):
                 self.is_cursor_visible = False
                 time.sleep(1)
 
-    def py_auto_complete(self):
-        """python auto complete"""
+    def file_open(self, name):
+        """Runs at file openning"""
+        self.file_name = name
+        for i in self.highlighters:
+            if self.file_name.split('.')[-1] in i[0]:
+                self.highlighter = i[1]
+        for i in self.auto_completers:
+            if self.file_name.split('.')[-1] in i[0]:
+                self.auto_completer = i[1]
+
+    def extensions(self):
+        """Extensions"""
+        for i in extensions:
+            if i.TYPE == 'Highlighter':
+                self.highlighters.append([i.FILE_TYPES, i.highlighter])
+            elif i.TYPE == 'AutoComplete':
+                self.auto_completers.append([i.FILE_TYPES,
+                                            i.auto_complete])
         while True:
-            input_str = '\n'.join(''.join(i) for i in self.input)
-            line = self.input_line
-            col = self.input_index
-            if (input_str != '' and input_str.split('\n')[line] != ''):
-                script = jedi.Script(input_str, path='')
-                self.completions = script.complete(line + 1,
-                                                   col)
+            code = '\n'.join(''.join(i) for i in self.input)
+            self.completions = self.auto_completer(code,
+                                                   self.input_index,
+                                                   self.input_line)
 
     def main_loop(self):
         """Starts main loop"""
@@ -352,4 +360,5 @@ class Window(object):
         threading.Thread(target=self.check_for_keys).start()
         threading.Thread(target=self.draw, daemon=True).start()
         threading.Thread(target=self.cursor, daemon=True).start()
-        threading.Thread(target=self.py_auto_complete, daemon=True).start()
+        threading.Thread(target=self.extensions, daemon=True).start()
+        self.file_open('<None>')
