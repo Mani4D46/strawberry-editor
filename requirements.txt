@@ -1,2 +1,3 @@
 readchar==4.0.3
 yachalk==0.1.5
+jedi==0.18.1

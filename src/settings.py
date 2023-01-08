@@ -1,7 +1,7 @@
 """Setting"""
 from yachalk import chalk
 
-BOX = '┏┓━┃┗┛'
+BOX = '┌┐─│└┘'
 
 ICONS = {'module': '\uea8b ', 'class': '\ueb5b ',
          'instance': '\ueb63 ', 'function': '\uea8c ',
@@ -20,4 +20,5 @@ STYLES = {'menu.unselected': chalk.bg_gray,
           'menu.end.unselected': chalk.gray,
           'menu.selected': chalk.bg_red,
           'menu.bg_color': chalk.bg_gray,
-          'completionbox.color': chalk.bg_gray.white}
+          'menubox.color': chalk.magenta,
+          'completionbox.color': chalk.magenta}

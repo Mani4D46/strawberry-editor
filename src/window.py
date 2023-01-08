@@ -36,18 +36,20 @@ class Window(object):
         self.terminal_lines = os.get_terminal_size().lines
         self.can_draw = True
 
-        self.menus = [Strawberry, File, Edit]
+        self.menus = [Strawberry(), File(), Edit()]
         self.current_menu = 0
+        self.menu_scroll_bar = 0
+        self.is_menu_visible = False
 
         self.file_name = '<None>'
 
         self.input = [[]]
-        self.input_index = 0
+        self.input_col = 0
         self.input_line = 0
         self.is_in_input = True
         self.is_cursor_visible = True
 
-        self.highlighter = lambda code, _: code
+        self.highlighter = lambda code, __: code
         self.highlighters = []
 
         self.completions = []
@@ -81,8 +83,8 @@ class Window(object):
     def key_right(self):
         """Right key press"""
         if self.is_in_input is True:
-            if self.input_index < len(self.input[self.input_line]):
-                self.input_index += 1
+            if self.input_col < len(self.input[self.input_line]):
+                self.input_col += 1
         else:
             if self.current_menu < len(self.menus) - 1:
                 self.current_menu += 1
@@ -90,38 +92,45 @@ class Window(object):
     def key_left(self):
         """Left key press"""
         if self.is_in_input is True:
-            if self.input_index > 0:
-                self.input_index -= 1
+            if self.input_col > 0:
+                self.input_col -= 1
         else:
             if self.current_menu > 0:
                 self.current_menu -= 1
 
     def key_up(self):
         """Up key press"""
-        if (self.is_auto_complete_visible is True and
-           self.auto_complete_scroll_bar > 0):
-            self.auto_complete_scroll_bar -= 1
-        elif self.input_line > 0:
-            self.input_line -= 1
-            if self.input_index > len(self.input[self.input_line]):
-                self.key_end()
+        if self.is_in_input is True:
+            if (self.is_auto_complete_visible is True and
+               self.auto_complete_scroll_bar > 0):
+                self.auto_complete_scroll_bar -= 1
+            elif self.input_line > 0:
+                self.input_line -= 1
+                if self.input_col > len(self.input[self.input_line]):
+                    self.key_end()
+        elif (self.is_menu_visible is True and
+              self.menu_scroll_bar > 0):
+            self.menu_scroll_bar -= 1
 
     def key_down(self):
         """Down key press"""
-        if self.is_auto_complete_visible is True:
-            self.auto_complete_scroll_bar += 1
-        elif self.input_line < len(self.input) - 1:
-            self.input_line += 1
-            if self.input_index > len(self.input[self.input_line]):
-                self.key_end()
+        if self.is_in_input is True:
+            if self.is_auto_complete_visible is True:
+                self.auto_complete_scroll_bar += 1
+            elif self.input_line < len(self.input) - 1:
+                self.input_line += 1
+                if self.input_col > len(self.input[self.input_line]):
+                    self.key_end()
+        elif self.is_menu_visible is True:
+            self.menu_scroll_bar += 1
 
     def key_home(self):
         """Home key press"""
-        self.input_index = 0
+        self.input_col = 0
 
     def key_end(self):
         """End key press"""
-        self.input_index = len(self.input[self.input_line])
+        self.input_col = len(self.input[self.input_line])
 
     def move_cursor(self, left, top):
         """Moves terminal cursor"""
@@ -160,6 +169,8 @@ class Window(object):
 
     def draw_auto_complete(self, left, top, index):
         """Writes auto Completion"""
+        if index >= len(self.completions):
+            self.auto_complete_scroll_bar = len(self.completions) - 1
         equal_to_ten = len(self.completions[index: 10 + index]) == 10
         completions = (self.completions[index: 10 + index] if equal_to_ten
                        else self.completions)
@@ -182,7 +193,7 @@ class Window(object):
                                                                    is True and
                                                                    line_index
                                                                    == 0):
-                text = f'{self.box[3]} > '
+                text = f'{self.box[3]} ▎ '
             text += (self.icons[i.type] + (f'{i.name.ljust(lenth)} '
                      + self.box[3]))
             self.stdout.write(apply_style(text))
@@ -192,6 +203,32 @@ class Window(object):
                               f'{self.box[2] * (lenth + 6)}{self.box[5]}'))
         if self.is_auto_complete_visible is False:
             self.auto_complete_scroll_bar = 0
+
+    def open_menu(self, left, top, index):
+        """Opens an menu"""
+        menu = self.menus[self.current_menu]
+        if index >= len(menu.list) - 1:
+            self.menu_scroll_bar = len(menu.list) - 1
+        if len(menu.list) > 0:
+            lenth = len(max(menu.list, key=len))
+        else:
+            lenth = 0
+        apply_style = self.style['menubox.color']
+        if lenth > 0:
+            self.move_cursor(left, top)
+            self.stdout.write(apply_style(self.box[0] + (self.box[2] * (lenth
+                                                         + 4)) + self.box[1]))
+            for line_index, i in enumerate(menu.list):
+                self.move_cursor(left, top + line_index + 1)
+                if line_index == index:
+                    text = f'{self.box[3]} ▎ '
+                else:
+                    text = f'{self.box[3]}   '
+                text += ((f'{i.ljust(lenth)} {self.box[3]}'))
+                self.stdout.write(apply_style(text))
+            self.move_cursor(left, top + len(menu.list) + 1)
+            self.stdout.write(apply_style(self.box[4] + (self.box[2] * (lenth
+                                                         + 4)) + self.box[5]))
 
     def draw(self):
         """Updates the screen"""
@@ -219,11 +256,11 @@ class Window(object):
                 self.move_cursor(0, line_index + 2)
                 self.stdout.write(str(line_index + 1).ljust(5) + '\u2502 ')
                 self.stdout.write(self.highlight(''.join(i)).replace('\n', ''))
-            self.move_cursor(self.input_index + 7, self.input_line + 2)
+            self.move_cursor(self.input_col + 7, self.input_line + 2)
             if self.is_in_input is True:
                 try:
                     character = (self.input[self.input_line]
-                                 [self.input_index])
+                                 [self.input_col])
                 except IndexError:
                     character = ' '
                 if self.is_cursor_visible is True:
@@ -233,8 +270,13 @@ class Window(object):
                         self.set_block_here(character)
             if (self.input[self.input_line] != [] and
                self.is_auto_complete_visible):
-                self.draw_auto_complete(self.input_index + 7, self.input_line
+                self.draw_auto_complete(self.input_col + 7, self.input_line
                                         + 3, self.auto_complete_scroll_bar)
+            if self.is_menu_visible is True and self.current_menu != 0:
+                menu_left = len('  '.join([i.name for i in self.menus[0:
+                                          self.current_menu + 1]])) - 2
+                self.move_cursor(menu_left, 1)
+                self.open_menu(menu_left, 1, self.menu_scroll_bar)
 
             self.stdout.write('')
             self.move_cursor(0, 0)
@@ -242,10 +284,12 @@ class Window(object):
 
     def add_newline(self):
         """Adds an newline to input"""
-        self.input[self.input_line + 1:] = ([], *self.input[self.input_line +
-                                                            1:])
+        before = self.input[self.input_line][:self.input_col]
+        after = self.input[self.input_line][self.input_col:]
+        self.input[self.input_line] = after
+        self.input[self.input_line:] = [before] + self.input[self.input_line:]
         self.input_line += 1
-        self.input_index = 0
+        self.input_col = 0
 
     def remove_line(self):
         """Removes an line from iput"""
@@ -256,26 +300,31 @@ class Window(object):
 
     def add_character(self, character):
         """Adds an character to input"""
-        self.input[self.input_line].insert(self.input_index, character)
-        self.input_index += 1
+        self.input[self.input_line].insert(self.input_col, character)
+        self.input_col += 1
 
     def remove_character(self):
         """Removes an character from input"""
-        if self.input_index > 0:
-            self.input[self.input_line].pop(self.input_index - 1)
-            self.input_index -= 1
-        else:
-            self.remove_line()
+        if self.input_col > 0:
+            self.input[self.input_line].pop(self.input_col - 1)
+            self.input_col -= 1
+        elif self.input_line > 0:
+            i = len(self.input[self.input_line])
+            self.input[self.input_line - 1] += self.input[self.input_line]
+            self.input[self.input_line] = []
+            self.input_line -= 1
+            self.input_col = len(self.input[self.input_line]) - i
+            self.input.pop(self.input_line + 1)
 
     def remove_word(self):
         """Removes an word from input"""
-        after_str = ''.join(self.input[self.input_line][self.input_index:])
+        after_str = ''.join(self.input[self.input_line][self.input_col:])
         lenth = len(self.input[self.input_line])
-        index = self.input_index
-        input_str = ''.join(self.input[self.input_line][:self.input_index])
+        index = self.input_col
+        input_str = ''.join(self.input[self.input_line][:self.input_col])
         self.input[self.input_line] = [*(input_str.rsplit(' ', 1)[0] +
                                          after_str)]
-        self.input_index = index - (lenth - len(self.input[self.input_line]))
+        self.input_col = index - (lenth - len(self.input[self.input_line]))
 
     def check_for_keys(self):
         """Checks for key_press in an while True(forever loop)"""
@@ -283,14 +332,22 @@ class Window(object):
             try:
                 key = getch()
                 if key == ESC:
-                    if self.is_auto_complete_visible is not True:
-                        self.is_in_input = not self.is_in_input
-                    else:
+                    if self.is_auto_complete_visible is True:
                         self.is_auto_complete_visible = False
+                    elif self.is_menu_visible is True:
+                        self.is_menu_visible = False
+                    else:
+                        self.is_in_input = not self.is_in_input
                 elif key == LEFT:
                     self.key_left()
+                    self.is_cursor_visible = True
                 elif key == RIGHT:
                     self.key_right()
+                    self.is_cursor_visible = True
+                elif key == UP:
+                    self.key_up()
+                elif key == DOWN:
+                    self.key_down()
                 elif key == CTRL_Q:
                     self.end()
                 elif self.is_in_input is True:
@@ -300,10 +357,6 @@ class Window(object):
                         self.remove_line()
                     elif key == BACKSPACE:
                         self.remove_character()
-                    elif key == UP:
-                        self.key_up()
-                    elif key == DOWN:
-                        self.key_down()
                     elif key == HOME:
                         self.key_home()
                     elif key == END:
@@ -315,7 +368,14 @@ class Window(object):
                     elif ord(key[0]) in range(32, 127):
                         self.add_character(key[0])
                         self.is_auto_complete_visible = True
-                self.is_cursor_visible = True
+                    self.is_cursor_visible = True
+                elif key == ENTER:
+                    if self.is_menu_visible is False:
+                        self.is_menu_visible = True
+                    else:
+                        (self.menus[self.current_menu].exec
+                                   [self.menu_scroll_bar])(self)
+                        self.key_end()
             except KeyboardInterrupt:
                 self.end()
             except SystemExit:
@@ -330,9 +390,16 @@ class Window(object):
                 self.is_cursor_visible = False
                 time.sleep(1)
 
-    def file_open(self, name):
+    def file_open(self, name, code=''):
         """Runs at file openning"""
+        if code == '':
+            code = '\n'.join([''.join(i) for i in self.input])
         self.file_name = name
+        self.highlighter = lambda code, __: code
+        self.auto_completer = lambda _, __, ___: []
+        self.input = [[*i] for i in code.split('\n')]
+        self.input_line = 0
+        self.input_col = len(self.input[self.input_line])
         for i in self.highlighters:
             if self.file_name.split('.')[-1] in i[0]:
                 self.highlighter = i[1]
@@ -350,9 +417,12 @@ class Window(object):
                                             i.auto_complete])
         while True:
             code = '\n'.join(''.join(i) for i in self.input)
-            self.completions = self.auto_completer(code,
-                                                   self.input_index,
-                                                   self.input_line)
+            try:
+                self.completions = self.auto_completer(code,
+                                                       self.input_col,
+                                                       self.input_line)
+            except Exception:
+                self.completions = []
 
     def main_loop(self):
         """Starts main loop"""

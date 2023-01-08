@@ -3,7 +3,7 @@ from pygments import highlight
 from pygments.lexers import get_lexer_by_name
 
 TYPE = 'Highlighter'
-FILE_TYPES = ['py', '<None>']
+FILE_TYPES = ['py']
 
 
 def highlighter(code, formatter):
