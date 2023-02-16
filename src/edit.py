@@ -1,7 +1,10 @@
 """
 Main text editor
 """
+import pathlib
+
 from pyperclip import paste
+from pygments.formatters import Terminal256Formatter, TerminalFormatter
 
 from .editor import Editor
 from .consts import (
@@ -14,17 +17,26 @@ class TextEditor(Editor):
     """
     Text Editor
     """
-    def __init__(self, window):
+    def __init__(self, window, file, text):
         self.keys = {None: self.__event_keypress__, UP: self.up_keypress,
                      DOWN: self.down_keypress, LEFT: self.left_keypress,
                      RIGHT: self.right_keypress, HOME: self.move_beginning,
                      END: self.move_end, CTRL_V: self.paste}
-        self.text = [[]]
+        self.file = file
+        self.name = pathlib.Path(file).name
+        self.file_extention = file.split('.')[-1]
+        self.text = [list(i) for i in text.split('\n')]
         self.char_index = 0
         self.line_index = 0
         self.window = window
         self.horizontal_scroll = 0
         self.line_horizontal_scroll = 0
+        if CONFIGS['editor.use_256_colors'] is True:
+            self.formatter = Terminal256Formatter(style=CONFIGS[
+                                                                'editor.style'
+                                                               ])
+        else:
+            self.formatter = TerminalFormatter(style=CONFIGS['editor.style'])
 
     def __event_keypress__(self, key):
         if key[0] == BACKSPACE:
@@ -120,12 +132,25 @@ class TextEditor(Editor):
         for line, text in enumerate(self.to_string().split('\n')):
             line_num = self.make_line_num(line + 1)
             try:
-                output.append((line_num + text[self.horizontal_scroll:])
-                              [:self.window.terminal_cols])
+                text = (self.window.extention_commands[
+                            f'editor.highlight:{self.file_extention}'
+                        ](text[self.horizontal_scroll:][:(self.window.
+                                                          terminal_cols)
+                                                        - len(self.
+                                                              make_line_num('')
+                                                              )],
+                          self.formatter))
+            except KeyError:
+                text = text[self.horizontal_scroll:][:self.window.terminal_cols
+                                                     - len(self.make_line_num
+                                                           (''))]
+
+            try:
+                output.append((line_num + text))
             except IndexError:
                 pass
 
-        for _ in range(self.window.terminal_lines - len(output)):
+        for _ in range(self.window.terminal_lines - len(output) - 2):
             output.append(self.make_line_num('~'))
 
         return '\n'.join(output)

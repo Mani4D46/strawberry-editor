@@ -22,8 +22,14 @@ class File():
         root = tk.Tk()
         root.withdraw()
         file_path = filedialog.askopenfilename()
-        with open(file_path, 'r', encoding='utf8') as file:
-            window.file_open(file_path, file.read())
+        del root
+        try:
+            if file_path == '':
+                self.open(window)
+            with open(file_path, 'r', encoding='utf8') as file:
+                window.open_file(file_path, file.read())
+        except UnicodeDecodeError:
+            pass
 
     def save(self, window):
         """Save an file"""
@@ -36,7 +42,7 @@ class File():
         root = tk.Tk()
         root.withdraw()
         file_path = filedialog.asksaveasfilename()
-        window.file_open(file_path)
+        window.open_file(file_path)
         self.save(window)
 
 

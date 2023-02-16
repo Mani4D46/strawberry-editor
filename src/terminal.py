@@ -3,13 +3,14 @@ import sys
 import os
 
 try:
-    from msvcrt import getch as msvcrt_getch
+    from msvcrt import getwch
 
     def getch():
         """
         Gets a single character from STDIO.
         """
-        return msvcrt_getch().decode('utf8')
+        return getwch().encode('utf-8', 'replace').decode()
+
 except ImportError:
     def getch():
         """
