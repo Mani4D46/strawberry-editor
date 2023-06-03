@@ -44,8 +44,12 @@ class TerminalWindow():
         cls.flush = sys.stdout.flush
 
     def start_terminal(self):
-        """Runs at Start of terminal or when clearing"""
-        sys.stdout.write(' ' * self.terminal_cols * self.terminal_lines)
+        """Runs at start of terminal"""
+        sys.stdout.write(f"{CSI}?1049h")
+
+    def end_terminal(self):
+        """Runs at end of terminal"""
+        sys.stdout.write(f"{CSI}?1049l")
 
     def getch(self):
         """Gets a key from STDIO"""
@@ -73,7 +77,7 @@ class TerminalWindow():
         Clears Terminal
         """
         self.move_cursor(0, 0)
-        self.start_terminal()
+        sys.stdout.write(' ' * self.terminal_cols * self.terminal_lines)
         self.move_cursor(0, 0)
 
     def move_cursor(self, left, top):

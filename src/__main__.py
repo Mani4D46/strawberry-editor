@@ -1,4 +1,4 @@
-"""Lambda"""
+"""StrawBerryEdit"""
 from .window import Window
 
 window = Window()

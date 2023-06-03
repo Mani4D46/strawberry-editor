@@ -1,11 +1,13 @@
 """Window"""
-import sys
+import os
 import time
 import threading
+import tkinter as tk
+from tkinter import filedialog
 
 import yachalk
 
-from .settings import STYLES, CONFIGS, KEY_BINDINGS
+from .settings import STYLES, CONFIGS, KEY_BINDINGS, ICONS
 from .menus import Strawberry, File, Edit
 from .edit import TextEditor
 from .extensions import extensions
@@ -15,13 +17,15 @@ from .terminal import TerminalWindow
 BLOCK_CURSOR = yachalk.chalk.bg_white_bright.black
 UNDERLINE_CURSOR = yachalk.chalk.underline
 
+os.chdir(os.path.join(os.path.dirname(__file__), 'extensions'))
+
 
 class Window(TerminalWindow):
     """Window"""
     def __init__(self):
         self.input_keys = {}
 
-        self.tabs = [TextEditor(self, 'unnamed', '')]
+        self.tabs = []
         self.current_tab = 0
 
         self.menus = [Strawberry(), File(), Edit()]
@@ -34,36 +38,49 @@ class Window(TerminalWindow):
         self.input_mode = True
         self.can_show_cursor = True
 
-        self.extention_commands = {}
+        self.extension_commands = {}
 
-        self.t_keypress = None
+        self.t_wait_for_exit = None
+        self.d_keypress = None
         self.d_draw = None
         self.d_cursor = None
 
         self.can_redraw = True
+        self.kill = False
 
     def enter(self):
         """Runs at start of program"""
         self.start_terminal()
 
         for i in extensions:
-            self.extention_commands.update(i.commands)
+            self.extension_commands.update(i.commands)
+
+        self.tabs.append(self.extension_commands['home_page.page']()(self))
 
     def exit(self):
         """Runs at end of program"""
-        self.can_redraw = False
-        self.show_cursor()
-        self.clear_terminal()
-        sys.exit()
+        self.kill = True
 
     def toggle_input_mode(self):
         """Toggles between input mode"""
         self.input_mode = not self.input_mode
 
-    def open_file(self, name, code):
-        """Runs when changed file"""
-        self.tabs.append(TextEditor(self, name, code))
-        self.current_tab += 1
+    def new_file(self):
+        """Makes a new file"""
+        self.tabs.append(TextEditor(self, 'Untitled', ''))
+
+    def open_file(self):
+        """Opens a existing file"""
+        root = tk.Tk()
+        root.withdraw()
+        file_path = filedialog.askopenfilename()
+        del root
+        try:
+            if file_path != '':
+                with open(file_path, 'r', encoding='utf8') as file:
+                    self.tabs.append(TextEditor(self, file_path, file.read()))
+        except UnicodeDecodeError:
+            pass
 
     def draw(self):
         """
@@ -76,6 +93,9 @@ class Window(TerminalWindow):
 
             self.clear_terminal()
             self.write(STYLES['menu.bg_color'](' ' * self.terminal_cols))
+            self.move_cursor(0, 0)
+            current_tab = self.tabs[self.current_tab]
+            current_tab.__draw__()
             self.move_cursor(0, 0)
             for menu_index, menu in enumerate(self.menus):
                 if menu_index == 0:
@@ -107,7 +127,9 @@ class Window(TerminalWindow):
                                STYLES['tab.start.unselected'])(CONFIGS
                                                                ['tab.start']))
                 if tab_index == self.current_tab:
-                    self.write(STYLES['tab.selected'](f' {tabs.name} '))
+                    self.write(STYLES['tab.selected'](
+                        f' {ICONS[tabs.icon]}{tabs.name} ')
+                    )
                 else:
                     self.write(STYLES['tab.unselected'](f' {tabs.name} '))
             self.move_cursor(self.terminal_cols - len(CONFIGS['tab.end'])
@@ -121,14 +143,8 @@ class Window(TerminalWindow):
                                               'unselected_circle']))
             self.write(STYLES['tab.end.unselected'](CONFIGS['tab.end']))
 
-            current_tab = self.tabs[self.current_tab]
-            editor_draw = current_tab.__draw__()
             cursor_pos = current_tab.__cursor__()['position']
             cursor_is_hidden = current_tab.__cursor__()['is_hidden']
-
-            for line, i in enumerate(editor_draw.split('\n')):
-                self.move_cursor(0, line + 1)
-                self.write(i)
 
             if cursor_is_hidden is False:
                 if self.can_show_cursor is True:
@@ -141,11 +157,11 @@ class Window(TerminalWindow):
 
             if self.is_menu_opened is True:
                 left = len(''.join([f' {i.name} ' for i in
-                                    self.menus[:self.current_menu]])) + 2
+                                    self.menus[:self.current_menu]])) + 3
                 self.move_cursor(left, 1)
                 items = self.menus[self.current_menu].list
                 try:
-                    max_len_items = len(max(items, key=len))
+                    max_len_items = len(max(items, key=len)) + 1
                     max_len_items = max(max_len_items, 10)
                 except ValueError:
                     max_len_items = 0
@@ -166,8 +182,12 @@ class Window(TerminalWindow):
                 self.exit()
             elif i == 'toggle_input_mode':
                 self.toggle_input_mode()
-            elif i in self.extention_commands:
-                self.extention_commands[i]()
+            elif i == 'open_file':
+                self.open_file()
+            elif i == 'new_file':
+                self.new_file()
+            elif i in self.extension_commands:
+                self.extension_commands[i]()
 
     def key_press(self):
         """Handels keypresses"""
@@ -224,16 +244,31 @@ class Window(TerminalWindow):
             self.can_show_cursor = False
             time.sleep(CONFIGS['cursor.blink_time'])
 
+    def wait_for_exit(self):
+        """A Function that waits for system exit and then kills all daemon"""
+        while self.kill is False:
+            pass
+        try:
+            self.can_redraw = False
+            self.show_cursor()
+            self.clear_terminal()
+            self.end_terminal()
+        except Exception as exc:
+            raise Exception from exc
+        os.kill(os.getpid(), 0)
+
     def main_loop(self):
         """
         Starts the loop
         """
         self.enter()
 
-        self.t_keypress = threading.Thread(target=self.key_press)
+        self.t_wait_for_exit = threading.Thread(target=self.wait_for_exit)
+        self.d_keypress = threading.Thread(target=self.key_press, daemon=True)
         self.d_draw = threading.Thread(target=self.draw, daemon=True)
         self.d_cursor = threading.Thread(target=self.cursor, daemon=True)
 
-        self.t_keypress.start()
+        self.t_wait_for_exit.start()
+        self.d_keypress.start()
         self.d_draw.start()
         self.d_cursor.start()

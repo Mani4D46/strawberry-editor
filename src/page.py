@@ -1,7 +1,7 @@
-"""Main Editor Class"""
+"""Main Page Class"""
 
 
-class Editor():
+class Page():
     """Editors Base Class"""
     def __init_subclass__(cls):
         cls.keys = {None: cls.__event_keypress__}
@@ -14,3 +14,6 @@ class Editor():
 
     def __draw__(self):
         return ''
+
+    def __cursor__(self):
+        return {'is_hidden': False, 'position': [0, 0]}

@@ -12,24 +12,20 @@ class Strawberry():
 class File():
     """File menu"""
     name = 'File'
-    list = ['open', 'save', 'save as']
+    list = ['Open     Ctrl + o',
+            'New      Ctrl + n',
+            'Save     Ctrl + s',
+            'Save As  Ctrl + S']
 
     def __init__(self):
-        self.exec = [self.open, self.save, self.save_as]
+        self.exec = [self.open, self.new, self.save, self.save_as]
 
     def open(self, window):
         """Opens an file"""
-        root = tk.Tk()
-        root.withdraw()
-        file_path = filedialog.askopenfilename()
-        del root
-        try:
-            if file_path == '':
-                self.open(window)
-            with open(file_path, 'r', encoding='utf8') as file:
-                window.open_file(file_path, file.read())
-        except UnicodeDecodeError:
-            pass
+        window.open_file()
+
+    def new(self, window):
+        window.new_file()
 
     def save(self, window):
         """Save an file"""
@@ -50,4 +46,4 @@ class Edit():
     """Edit menu"""
     name = 'Edit'
     list = ['t']
-    exec = [lambda window: None]
+    exec = [lambda _: None]

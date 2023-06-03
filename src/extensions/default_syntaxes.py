@@ -4,8 +4,8 @@ from pygments.lexers.markup import MarkdownLexer
 from pygments.lexers.python import Python3Lexer
 
 
-class Extention():
-    """Extention"""
+class Extension():
+    """Extension"""
     def __init__(self):
         self.commands = {'editor.highlight:py': self.highlighter_python,
                          'editor.highlight:md': self.highlighter_markdown}

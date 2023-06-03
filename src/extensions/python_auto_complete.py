@@ -2,11 +2,11 @@
 import jedi
 
 
-class Extention():
-    """Extention"""
+class Extension():
+    """Extension"""
     def __init__(self):
         self.commands = {'editor.auto_complete:py': self.auto_complete}
-        self.auto_complete_file_extentions = ['.py']
+        self.auto_complete_file_extensions = ['.py']
 
     def auto_complete(self, code, col, line):
         """Python auto complete"""
