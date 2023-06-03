@@ -131,7 +131,8 @@ class Window(TerminalWindow):
                         f' {ICONS[tabs.icon]}{tabs.name} ')
                     )
                 else:
-                    self.write(STYLES['tab.unselected'](f' {tabs.name} '))
+                    self.write(STYLES['tab.unselected'](f' {ICONS[tabs.icon]}'
+                                                        + '{tabs.name} '))
             self.move_cursor(self.terminal_cols - len(CONFIGS['tab.end'])
                              - len(CONFIGS['selected_circle' if self.on_tab is
                                    True and self.input_mode is False else
