@@ -94,9 +94,6 @@ class Window(TerminalWindow):
             self.clear_terminal()
             self.write(STYLES['menu.bg_color'](' ' * self.terminal_cols))
             self.move_cursor(0, 0)
-            current_tab = self.tabs[self.current_tab]
-            current_tab.__draw__()
-            self.move_cursor(0, 0)
             for menu_index, menu in enumerate(self.menus):
                 if menu_index == 0:
                     self.write(STYLES['menu.start.selected' if
@@ -144,6 +141,9 @@ class Window(TerminalWindow):
                                               'unselected_circle']))
             self.write(STYLES['tab.end.unselected'](CONFIGS['tab.end']))
 
+            current_tab = self.tabs[self.current_tab]
+            current_tab.__draw__()
+            self.move_cursor(0, 0)
             cursor_pos = current_tab.__cursor__()['position']
             cursor_is_hidden = current_tab.__cursor__()['is_hidden']
 

@@ -45,5 +45,7 @@ class File():
 class Edit():
     """Edit menu"""
     name = 'Edit'
-    list = ['t']
-    exec = [lambda _: None]
+    list = ['Undo     Ctrl + z',
+            'Redo     Ctrl + y',
+            'Paste    Ctrl + v']
+    exec = [lambda _: None for i in range(3)]
