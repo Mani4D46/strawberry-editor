@@ -2,6 +2,8 @@
 import sys
 import os
 
+from .settings import CONFIGS
+
 try:
     from msvcrt import getwch
 
@@ -76,9 +78,12 @@ class TerminalWindow():
         """
         Clears Terminal
         """
-        self.move_cursor(0, 0)
-        sys.stdout.write(' ' * self.terminal_cols * self.terminal_lines)
-        self.move_cursor(0, 0)
+        if CONFIGS['CSI2J_reload_mode'] is True:
+            sys.stdout.write(f'{CSI}2J')
+        else:
+            self.move_cursor(0, 0)
+            sys.stdout.write(' ' * self.terminal_cols * self.terminal_lines)
+            self.move_cursor(0, 0)
 
     def move_cursor(self, left, top):
         """

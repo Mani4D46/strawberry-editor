@@ -25,6 +25,7 @@ class File():
         window.open_file()
 
     def new(self, window):
+        """Opens a new file"""
         window.new_file()
 
     def save(self, window):

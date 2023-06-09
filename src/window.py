@@ -2,9 +2,6 @@
 import os
 import time
 import threading
-import tkinter as tk
-from tkinter import filedialog
-
 import yachalk
 
 from .settings import STYLES, CONFIGS, KEY_BINDINGS, ICONS
@@ -55,7 +52,7 @@ class Window(TerminalWindow):
         for i in extensions:
             self.extension_commands.update(i.commands)
 
-        self.tabs.append(self.extension_commands['home_page.page']()(self))
+        self.tabs.append(self.extension_commands['home_page.page'](self))
 
     def exit(self):
         """Runs at end of program"""
@@ -68,19 +65,12 @@ class Window(TerminalWindow):
     def new_file(self):
         """Makes a new file"""
         self.tabs.append(TextEditor(self, 'Untitled', ''))
+        self.current_tab = len(self.tabs) - 1
 
     def open_file(self):
         """Opens a existing file"""
-        root = tk.Tk()
-        root.withdraw()
-        file_path = filedialog.askopenfilename()
-        del root
-        try:
-            if file_path != '':
-                with open(file_path, 'r', encoding='utf8') as file:
-                    self.tabs.append(TextEditor(self, file_path, file.read()))
-        except UnicodeDecodeError:
-            pass
+        self.tabs.append(self.extension_commands['explorer_page.page'](self))
+        self.current_tab = len(self.tabs) - 1
 
     def draw(self):
         """
@@ -88,9 +78,6 @@ class Window(TerminalWindow):
         """
         self.hide_cursor()
         while True:
-            if self.can_redraw is False:
-                break
-
             self.clear_terminal()
             self.write(STYLES['menu.bg_color'](' ' * self.terminal_cols))
             self.move_cursor(0, 0)
@@ -117,7 +104,7 @@ class Window(TerminalWindow):
             self.move_cursor(0, self.terminal_lines - 1)
             self.write(STYLES['tab.bg_color'](' ' * self.terminal_cols))
             self.move_cursor(0, self.terminal_lines - 1)
-            for tab_index, tabs in enumerate(self.tabs):
+            for tab_index, tab in enumerate(self.tabs):
                 if tab_index == 0:
                     self.write((STYLES['tab.start.selected'] if
                                self.current_tab == 0 else
@@ -125,11 +112,11 @@ class Window(TerminalWindow):
                                                                ['tab.start']))
                 if tab_index == self.current_tab:
                     self.write(STYLES['tab.selected'](
-                        f' {ICONS[tabs.icon]}{tabs.name} ')
+                        f' {ICONS[tab.icon]}{tab.name} ')
                     )
                 else:
-                    self.write(STYLES['tab.unselected'](f' {ICONS[tabs.icon]}'
-                                                        + '{tabs.name} '))
+                    self.write(STYLES['tab.unselected'](f' {ICONS[tab.icon]}'
+                                                        + f'{tab.name} '))
             self.move_cursor(self.terminal_cols - len(CONFIGS['tab.end'])
                              - len(CONFIGS['selected_circle' if self.on_tab is
                                    True and self.input_mode is False else
@@ -140,21 +127,6 @@ class Window(TerminalWindow):
                                               self.input_mode is False else
                                               'unselected_circle']))
             self.write(STYLES['tab.end.unselected'](CONFIGS['tab.end']))
-
-            current_tab = self.tabs[self.current_tab]
-            current_tab.__draw__()
-            self.move_cursor(0, 0)
-            cursor_pos = current_tab.__cursor__()['position']
-            cursor_is_hidden = current_tab.__cursor__()['is_hidden']
-
-            if cursor_is_hidden is False:
-                if self.can_show_cursor is True:
-                    self.show_cursor()
-                else:
-                    self.hide_cursor()
-                self.move_cursor(cursor_pos[0], cursor_pos[1] + 1)
-            else:
-                self.hide_cursor()
 
             if self.is_menu_opened is True:
                 left = len(''.join([f' {i.name} ' for i in
@@ -174,11 +146,28 @@ class Window(TerminalWindow):
                     self.move_cursor(left, 2 + enum)
                 self.hide_cursor()
 
+            self.move_cursor(0, 0)
+            current_tab = self.tabs[self.current_tab]
+            current_tab.__draw__()
+
+            cursor_pos = current_tab.__cursor__()['position']
+            cursor_is_hidden = current_tab.__cursor__()['is_hidden']
+
+            if cursor_is_hidden is False:
+                if self.can_show_cursor is True:
+                    self.show_cursor()
+                else:
+                    self.hide_cursor()
+                self.move_cursor(cursor_pos[0], cursor_pos[1] + 1)
+            else:
+                self.hide_cursor()
+
             self.flush()
 
     def execute_command(self, command):
         """Executes commands"""
-        for i in command.split('-'):
+        for i in command.split(','):
+            i = i.strip()
             if i == 'exit':
                 self.exit()
             elif i == 'toggle_input_mode':

@@ -31,7 +31,10 @@ class TextEditor(Page):
                      KEYB['beginning_of_line']: self.move_beginning,
                      KEYB['end_of_line']: self.move_end,
                      KEYB['paste']: self.paste,
-                     KEYB['toggle_select_mode']: self.toggle_select_mode}
+                     KEYB['remove_word']: self.remove_word,
+                     KEYB['toggle_select_mode']: self.toggle_select_mode,
+                     KEYB['toggle_auto_completion']:
+                     self.toggle_auto_completion}
         self.file = file
         self.name = pathlib.Path(file).name
         self.icon = 'file'
@@ -48,12 +51,23 @@ class TextEditor(Page):
 
         self.window = window
 
+        try:
+            self.syntax_highlighter = self.window.extension_commands[
+                f'editor.highlight:{self.file_extension}'
+            ]
+        except KeyError:
+            self.syntax_highlighter = self.default_highlighter
+
         self.auto_completion_suggestions = []
+        self.show_auto_completion = True
+        self.selected_completion = 0
 
         self.horizontal_scroll = 0
         self.line_horizontal_scroll = 0
-        self.vertical_scroll = 0
+        self.max_vertical_scroll = 0
         self.min_vertical_scroll = 0
+        self.max_horizontal_scroll = 0
+        self.min_horizontal_scroll = 0
         if CONFIGS['editor.use_256_colors'] is True:
             self.formatter = Terminal256Formatter(style=CONFIGS[
                                                                 'editor.style'
@@ -90,6 +104,12 @@ class TextEditor(Page):
             self.text[self.line_index].insert(self.char_index, key[0])
             self.char_index += 1
 
+    def default_highlighter(self, *inputs):
+        """
+        Just a function to return the first inputs
+        """
+        return inputs[0]
+
     def toggle_select_mode(self):
         """Toggles select mode"""
         self.is_in_select_mode = not self.is_in_select_mode
@@ -99,14 +119,12 @@ class TextEditor(Page):
             self.selected_char_index = self.char_index
             self.selected_line_index = self.line_index
 
-    def remove_selected(self):
-        """Removes selected text"""
-        if self.is_in_select_mode is True:
-            self.text.append('bbb')
+    def toggle_auto_completion(self):
+        """Toggles Auto Completion"""
+        self.show_auto_completion = not self.show_auto_completion
 
     def paste(self):
         """Pastes a text to terminal"""
-        self.remove_selected()
         for i in paste():
             if ord(i) > 31:
                 self.__event_keypress__(i)
@@ -147,8 +165,6 @@ class TextEditor(Page):
         """Runs at left key press"""
         if self.char_index > 0:
             self.char_index -= 1
-        if self.horizontal_scroll > 0:
-            self.horizontal_scroll -= 1
         self.selected_char_index = self.char_index
         self.selected_line_index = self.line_index
 
@@ -156,7 +172,6 @@ class TextEditor(Page):
         """Runs at right key press"""
         if self.char_index <= len(self.text[self.line_index]) - 1:
             self.char_index += 1
-            self.horizontal_scroll += 1
         self.selected_char_index = self.char_index
         self.selected_line_index = self.line_index
 
@@ -166,7 +181,10 @@ class TextEditor(Page):
 
     def remove_word(self):
         """Returns string version of text"""
-        return '\n'.join([''.join(i) for i in self.text])
+        last_word = ''.join(self.text[self.line_index]).rsplit(' ', 1)[1]
+        self.text[self.line_index] = (self.text[self.line_index]
+                                      [0: -len(last_word)])
+        self.char_index = len(self.text[self.line_index]) - len(last_word)
 
     def get_icon(self):
         """Returns name of icon by file extension"""
@@ -188,8 +206,8 @@ class TextEditor(Page):
         return line_num
 
     def __draw__(self):
-        output = []
-        output.append(self.make_line_num(''))
+        self.window.move_cursor(0, 1)
+        self.window.write(self.make_line_num(''))
 
         problems = [[] for _ in range(len(self.text) + 1)]
 
@@ -203,61 +221,45 @@ class TextEditor(Page):
         for i in linter_output:
             problems[i[0] - 1].append(f'{ICONS[i[2]]} {i[1]}: {i[3]}')
 
-        self.line_horizontal_scroll = -(self.window.terminal_cols - 1
-                                        - len(self.make_line_num('')))
-        self.horizontal_scroll = self.line_horizontal_scroll
+        max_text_lenth = (self.window.terminal_cols -
+                          len(self.make_line_num('')))
 
-        self.vertical_scroll = self.line_index + self.window.terminal_lines - 2
+        self.min_horizontal_scroll = max(0, self.char_index - max_text_lenth)
+        self.max_horizontal_scroll = (self.min_horizontal_scroll +
+                                      max_text_lenth)
+
+        self.max_vertical_scroll = (self.min_vertical_scroll +
+                                    self.window.terminal_cols - 1)
 
         if self.line_index >= self.window.terminal_lines // 2:
             self.min_vertical_scroll = (self.line_index -
                                         self.window.terminal_lines // 2) + 1
         else:
             self.min_vertical_scroll = 1
+        self.max_vertical_scroll = (self.min_vertical_scroll +
+                                    self.window.terminal_lines - 1)
 
-        for line, text in enumerate(self.to_string().split('\n')):
-            line_num = self.make_line_num(line + 1)
+        for line_number in range(2, self.window.terminal_lines
+                                 - 1):
+            self.window.move_cursor(0, line_number)
+            self.window.write(self.make_line_num('~'))
 
-            try:
-                text = (self.window.extension_commands[
-                            f'editor.highlight:{self.file_extension}'
-                        ](text[self.horizontal_scroll:][:(self.window.
-                                                          terminal_cols)
-                                                        - len(self.
-                                                              make_line_num('')
-                                                              )],
-                          self.formatter))
-            except KeyError:
-                text = text[self.horizontal_scroll:][:self.window.terminal_cols
-                                                     - len(self.make_line_num
-                                                           (''))]
-
+        for line, chars in list(enumerate(self.text))[self.min_vertical_scroll
+                                                      - 1:
+                                                      self.max_vertical_scroll
+                                                      - 4]:
             if problems[line] != []:
-                problems_str = problems[line][0]
+                problems_str = ' ' + problems[line][0]
             else:
                 problems_str = ''
-
-            try:
-                output.append((line_num + text + ' ' * 4 + problems_str))
-            except IndexError:
-                pass
-
-        output = output[self.min_vertical_scroll - 1: self.vertical_scroll]
-
-        for _ in range(self.window.terminal_lines - len(output) - 2):
-            output.append(self.make_line_num('~'))
-
-        for line, text in enumerate(output):
-            self.window.move_cursor(0, line + 1)
+            self.window.move_cursor(0, 3 + line - self.min_vertical_scroll)
+            text = self.syntax_highlighter(''.join(chars)[
+                                  self.min_horizontal_scroll:
+                                  self.max_horizontal_scroll
+                              ], self.formatter)
+            self.window.write(self.make_line_num(line))
             self.window.write(text)
-
-        cursor_location = (self.char_index
-                           + len(self.make_line_num('')), line + 1)
-
-        for line, text in enumerate(self.auto_completion_suggestions):
-            self.window.move_cursor(cursor_location[0], cursor_location[1]
-                                    + line)
-            self.window.write(text)
+            self.window.write(problems_str)
 
     def set_auto_completions(self):
         """
@@ -266,8 +268,8 @@ class TextEditor(Page):
         """
         try:
             plugin_output = self.window.extension_commands[
-                f'editor.linter:{self.file_extension}'
-            ](self.to_string())
+                f'editor.auto_complete:{self.file_extension}'
+            ](self.to_string(), self.char_index + 1, self.line_index + 1)
         except KeyError:
             plugin_output = []
         self.auto_completion_suggestions = plugin_output

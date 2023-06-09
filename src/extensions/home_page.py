@@ -3,7 +3,7 @@ Home page
 """
 from ..page import Page
 from ..consts import (
-    UP, DOWN, ENTER, CR, LF, TAB
+    UP, DOWN, ENTER, CR, LF
 )
 from ..settings import STYLES
 
@@ -20,9 +20,11 @@ class Home(Page):
         self.icon = 'home'
         self.window = window
 
-        self.options = {'New File       Ctrl + n': self.new_file,
-                        'Open File      Ctrl + o': self.open_file,
-                        'Open Project   Ctrl + o': self.open_file}
+        self.options = ['New File       Ctrl + n',
+                        'Open File      Ctrl + o',
+                        'Open Project   Ctrl + o']
+        self.options_executable = [self.new_file, self.open_file,
+                                   self.open_file]
         self.selected_option = 0
 
     def __event_keypress__(self, _):
@@ -40,6 +42,7 @@ class Home(Page):
 
     def select(self):
         """Runs at enter key press"""
+        self.options_executable[self.selected_option]()
 
     def __draw__(self):
         with open('_home_page/logo.txt', 'r', encoding='utf8') as file:
@@ -76,7 +79,7 @@ class Home(Page):
 class Extension():
     """Extension"""
     def __init__(self):
-        self.commands = {'home_page.page': self.home_page}
+        self.commands = {'home_page.page': self.home_page()}
 
     def home_page(self):
         """Returns the home page"""

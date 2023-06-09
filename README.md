@@ -1,6 +1,31 @@
 # Strawberry Editor
-an fast and highly customizable TUI text editor made in python
+![Issues](https://img.shields.io/github/issues/Mani4D46/strawberry-editor?color=red&style=for-the-badge)
+![Stars](https://img.shields.io/github/stars/Mani4D46/strawberry-editor?color=yellow&style=for-the-badge)
+![License](https://img.shields.io/github/license/Mani4D46/strawberry-editor?style=for-the-badge)
+
+
+an easy to use TUI text editor with a self explanatory UI made in Python
 
 ![Screenshot](https://github.com/Mani4D46/Lambda/blob/main/image.PNG)
 
-## NOTE: This project is HIGHLY work in progress so if you find an bug please open an issue
+## Features
+* ➕ Everything can be changed using Extensions
+* 📦 Has a lot of useful features out of the box
+* 🏫 Easy to learn
+* ⌨️ Everything has the keybinding it needs to. for example Save is Ctrl + s
+
+## Installation
+There is no need to install anything except python
+just download the files and then open start.py using:
+```bash
+python3 start.py
+```
+or
+```bash
+python start.py
+```
+or
+```bash
+py start.py
+```
+inside the main folder (not the src)

@@ -6,7 +6,7 @@ from .consts import (
     # File System
     CTRL_N, CTRL_O,
     # Text Editor
-    CTRL_L, END, HOME, LEFT, RIGHT, UP, DOWN, CTRL_V
+    CTRL_L, F4, END, HOME, LEFT, RIGHT, UP, DOWN, CTRL_V, CTRL_BACKSPACE
 )
 
 BOX = '┌┐─│└┘'
@@ -30,9 +30,11 @@ CONFIGS = {'menu.start': ' \ue0ba ', 'menu.end': '\ue0b8 ',
            'editor.use_256_colors': False,
            'editor.line_number_rjust_lenth': 6,
            'editor.line_number_rjust_character': ' ',
-           'cursor.blink_time': 0.5}
-# cursor.shape can be 'b' for box or 'u' for underline
-# editor.style can be any pygments style
+           'cursor.blink_time': 0.5,
+           'CSI2J_reload_mode': False,
+           'default_encoding': 'utf8'}
+
+# CSI2J_reload_mode may make the screen blink
 
 STYLES = {'menu.unselected': chalk.bg_gray,
           'menu.start.selected': chalk.red,
@@ -48,22 +50,25 @@ STYLES = {'menu.unselected': chalk.bg_gray,
           'tab.bg_color': chalk.bg_gray,
           'menubox.unselected': chalk.red.bg_gray,
           'menubox.selected': chalk.bg_red.gray,
-          'completionbox.color': chalk.magenta,
+          'completionbox.color': chalk.magenta.bg_black_bright,
           'editor.lines.selected': chalk.blue,
           'editor.lines.error': chalk.red,
           'editor.lines.warning': chalk.yellow,
           'editor.lines.info': chalk.cyan,
           'home_page.selected': chalk.magenta_bright,
+          'explorer_page.selected': chalk.magenta_bright,
           'selected_text': chalk.bg_blue}
 
 KEY_BINDINGS = {CTRL_Q: 'exit', ESC: 'toggle_input_mode',
                 CTRL_N: 'new_file', CTRL_O: 'open_file'}
 
 EDITOR_KEY_BINDINGS = {'toggle_select_mode': CTRL_L,
+                       'toggle_auto_completion': F4,
                        'paste': CTRL_V,
                        'beginning_of_line': HOME,
                        'end_of_line': END,
                        'left': LEFT,
                        'right': RIGHT,
                        'up': UP,
-                       'down': DOWN}
+                       'down': DOWN,
+                       'remove_word': CTRL_BACKSPACE}
