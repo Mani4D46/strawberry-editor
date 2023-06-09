@@ -51,6 +51,7 @@ class Explorer(Page):
                 self.window.tabs.append(TextEditor(
                     self.window, file_path, file.read()
                 ))
+            self.window.current_tab = len(self.window.tabs) - 1
         else:
             self.path = file_path
             self.files = ['..'] + os.listdir(self.path)
