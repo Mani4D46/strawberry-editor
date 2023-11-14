@@ -1,3 +1,7 @@
+# This project no longer gets any kind of update
+This project has many many many bugs and problems that cannot be fixed easily.
+the reason I'm not deleting this repository is to keep my achivements.
+
 # Strawberry Editor
 ![Issues](https://img.shields.io/github/issues/Mani4D46/strawberry-editor?color=red&style=for-the-badge)
 ![Stars](https://img.shields.io/github/stars/Mani4D46/strawberry-editor?color=yellow&style=for-the-badge)
